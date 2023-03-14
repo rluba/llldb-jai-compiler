@@ -13,9 +13,11 @@ def String( valobj: lldb.SBValue, internal_dict, options ):
     return "invalid length (" + str(len) + ")"
   if len > 0xFFFFFFFF:
     return "length is too big for LLDB's puny python bridge (" + str(len) + ")"
-  return bytes( data.GetPointeeData(0, len).uint8s ).decode( 'utf-8' )
+  # HACK: Assume it's utf-8.... I wonder if options contains an encoding option?
+  return ( '"'
+           + bytes( data.GetPointeeData(0, len).uint8s ).decode( 'utf-8' )
+           + '"' )
    
-
 # Annoyingly summary strings suppress the printing of the child members by
 # default. This is crappy, and means we have to write that code ourselves, but
 # it's not even that trivial as just printing the "GetValue()" of each child
