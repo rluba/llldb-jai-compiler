@@ -65,7 +65,8 @@ def __lldb_init_module( debugger: lldb.SBDebugger, dict ):
     debugpy.wait_for_client()
 
   C = debugger.HandleCommand
-  C( "type summary add -w JaiCompiler Newstring -F jaitype.String" )
-  C( r"type summary add -e -w JaiCompiler -x 'Array<.*>' -F jaitype.ResizableArrayCompiler" )
-  C( r"type synthetic add -w JaiCompiler -x 'Array<.*>' -l jaitype.ArrayChildrenProvider" )
+  C( "type summary add -w JaiCompiler Newstring -F jaicompilertype.String" )
+  C( r"type summary add -e -w JaiCompiler -x 'Array<.*>' -F jaicompilertype.ResizableArrayCompiler" )
+  C( r"type synthetic add -w JaiCompiler -x 'Array<.*>' -l jaicompilertype.ArrayChildrenProvider" )
   C( 'type category enable JaiCompiler' )
+
