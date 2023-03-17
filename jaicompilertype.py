@@ -22,6 +22,13 @@ def String( valobj: lldb.SBValue, internal_dict, options ):
 # default. This is crappy, and means we have to write that code ourselves, but
 # it's not even that trivial as just printing the "GetValue()" of each child
 # prints "None", helpfully.
+
+def ArrayCompiler( valobj: lldb.SBValue, internal_dict, options ):
+  raw: lldb.SBValue = valobj.GetNonSyntheticValue()
+  return ( "Array_View64(count="
+           + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
+           + ")" )
+
 def ResizableArrayCompiler( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
   data = raw.GetChildMemberWithName( 'data' ).GetValueAsSigned()
@@ -68,7 +75,9 @@ def __lldb_init_module( debugger: lldb.SBDebugger, dict ):
 
   C = debugger.HandleCommand
   C( "type summary add -w JaiCompiler Newstring -F jaicompilertype.String" )
+  C( "type summary add -w JaiCompiler Array_View64 -F jaicompilertype.ArrayCompiler" )
   C( r"type summary add -e -w JaiCompiler -x 'Array<.*>' -F jaicompilertype.ResizableArrayCompiler" )
   C( r"type synthetic add -w JaiCompiler -x 'Array<.*>' -l jaicompilertype.ArrayChildrenProvider" )
+  C( "type synthetic add -w JaiCompiler Array_View64 -l jaicompilertype.ArrayChildrenProvider" )
   C( 'type category enable JaiCompiler' )
 
