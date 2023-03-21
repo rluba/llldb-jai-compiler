@@ -23,27 +23,30 @@ def String( valobj: lldb.SBValue, internal_dict, options ):
 # it's not even that trivial as just printing the "GetValue()" of each child
 # prints "None", helpfully.
 
-def ArrayCompiler( valobj: lldb.SBValue, internal_dict, options ):
+def Array_View( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
   return ( "Array_View64(count="
            + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
            + ")" )
 
-def ResizableArrayCompiler( valobj: lldb.SBValue, internal_dict, options ):
+def ResizableArray( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
-  data = raw.GetChildMemberWithName( 'data' ).GetValueAsSigned()
-  if data == 0:
-    return ( "Array(uninitialised)" )
-
   return ( "Array(count="
            + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
            + ",allocated_count="
            + str( raw.GetChildMemberWithName( 'allocated_count' ).GetValueAsSigned() )
            + ")" )
 
+def BucketArray( valobj: lldb.SBValue, internal_dict, options ):
+  raw: lldb.SBValue = valobj.GetNonSyntheticValue()
+  return ( "Bucket_Array(count="
+           + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
+           + ")" )
+
 class ArrayChildrenProvider:
-  def __init__( self, valobj: lldb.SBValue, internal_dict) :
+  def __init__( self, valobj: lldb.SBValue, internal_dict):
     self.val = valobj
+    self.native = ["count", "data"]
 
   def update(self):
     self.count = self.val.GetChildMemberWithName( 'count' ).GetValueAsSigned()
@@ -57,15 +60,72 @@ class ArrayChildrenProvider:
     return True
 
   def num_children(self):
-    return self.count
+    return len(self.native) + self.count;
 
-  def get_child_at_index(self, index):
-    return self.data.CreateChildAtOffset( str(index),
+  def get_child_index(self, name):
+    try:
+      return self.native.index(name)
+    except ValueError:
+      return len(self.native) + int( name )
+
+  def get_child_at_index(self, child_index):
+    if child_index < len(self.native):
+      return self.val.GetChildMemberWithName(self.native[child_index])
+      
+    index = child_index - len(self.native);
+    return self.data.CreateChildAtOffset( '[' + str(index) + ']',
                                           self.data_size * index,
                                           self.data_type )
 
+
+class ResizableArrayChildrenProvider(ArrayChildrenProvider):
+  def __init__( self, valobj: lldb.SBValue, internal_dict):
+    ArrayChildrenProvider.__init__(self, valobj, internal_dict)
+    self.native = ["count", "allocated_count", "data"]
+
+
+class BucketArrayChildrenProvider:
+  def __init__( self, valobj: lldb.SBValue, internal_dict) :
+    self.val = valobj
+    self.native = ["count", "first_bucket", "current_bucket"]
+
+  def update(self):
+    self.count = self.val.GetChildMemberWithName( 'count' ).GetValueAsSigned()
+    self.first_bucket = self.val.GetChildMemberWithName('first_bucket');
+    self.data_type: lldb.SBType = self.first_bucket.GetChildMemberWithName('data').GetType().GetArrayElementType();
+    self.data_size = self.data_type.GetByteSize()
+    # self.data: lldb.SBValue = self.val.GetChildMemberWithName('data')
+    # self.data_type: lldb.SBType = self.data.GetType().GetPointeeType()
+    # self.data_size = self.data_type.GetByteSize()
+
+    return False
+
+  def has_children(self):
+    return True
+
+  def num_children(self):
+    return len(self.native) + self.count;
+
   def get_child_index(self, name):
-    return int( name )
+    try:
+      return self.native.index(name)
+    except ValueError:
+      return len(self.native) + int( name )
+
+  def get_child_at_index(self, child_index):
+    if child_index < len(self.native):
+      return self.val.GetChildMemberWithName(self.native[child_index])
+      
+    index = child_index - len(self.native);
+    bucket = self.first_bucket;
+    i = index;
+    while i >= bucket.GetChildMemberWithName('count').GetValueAsSigned():
+        i -= bucket.GetChildMemberWithName('count').GetValueAsSigned()
+        bucket = bucket.GetChildMemberWithName('next')
+
+    return bucket.GetChildMemberWithName('data').CreateChildAtOffset( '[' + str(index) + ']',
+                                          self.data_size * i,
+                                          self.data_type )
 
 
 def __lldb_init_module( debugger: lldb.SBDebugger, dict ):
@@ -74,10 +134,12 @@ def __lldb_init_module( debugger: lldb.SBDebugger, dict ):
     debugpy.wait_for_client()
 
   C = debugger.HandleCommand
-  C( "type summary add -w JaiCompiler Newstring -F jaicompilertype.String" )
-  C( "type summary add -w JaiCompiler Array_View64 -F jaicompilertype.ArrayCompiler" )
-  C( r"type summary add -e -w JaiCompiler -x 'Array<.*>' -F jaicompilertype.ResizableArrayCompiler" )
-  C( r"type synthetic add -w JaiCompiler -x 'Array<.*>' -l jaicompilertype.ArrayChildrenProvider" )
-  C( "type synthetic add -w JaiCompiler Array_View64 -l jaicompilertype.ArrayChildrenProvider" )
-  C( 'type category enable JaiCompiler' )
+  C(  "type summary add    -w JaiCompiler Newstring -F jaicompilertype.String" )
+  C(  "type summary add -e -w JaiCompiler Array_View64 -F jaicompilertype.Array_View" )
+  C( r"type summary add -e -w JaiCompiler -x '^Array<.*>$' -F jaicompilertype.ResizableArray" )
+  C( r"type summary add -e -w JaiCompiler -x '^Bucket_Array<.*>$' -F jaicompilertype.BucketArray" )
+  C(  "type synthetic add  -w JaiCompiler Array_View64 -l jaicompilertype.ArrayChildrenProvider" )
+  C( r"type synthetic add  -w JaiCompiler -x '^Array<.*>$' -l jaicompilertype.ResizableArrayChildrenProvider" )
+  C( r"type synthetic add  -w JaiCompiler -x '^Bucket_Array<.*>$' -l jaicompilertype.BucketArrayChildrenProvider" )
+  C(  'type category enable JaiCompiler' )
 
