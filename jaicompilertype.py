@@ -37,6 +37,14 @@ def ResizableArray( valobj: lldb.SBValue, internal_dict, options ):
            + str( raw.GetChildMemberWithName( 'allocated_count' ).GetValueAsSigned() )
            + ")" )
 
+def ResizableLocalArray( valobj: lldb.SBValue, internal_dict, options ):
+  raw: lldb.SBValue = valobj.GetNonSyntheticValue()
+  return ( "Local_Array(count="
+           + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
+           + ",allocated_count="
+           + str( raw.GetChildMemberWithName( 'allocated_count' ).GetValueAsSigned() )
+           + ")" )
+
 def BucketArray( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
   return ( "Bucket_Array(count="
@@ -82,6 +90,11 @@ class ResizableArrayChildrenProvider(ArrayChildrenProvider):
   def __init__( self, valobj: lldb.SBValue, internal_dict):
     ArrayChildrenProvider.__init__(self, valobj, internal_dict)
     self.native = ["count", "allocated_count", "data"]
+
+class ResizableLocalArrayChildrenProvider(ArrayChildrenProvider):
+  def __init__( self, valobj: lldb.SBValue, internal_dict):
+    ArrayChildrenProvider.__init__(self, valobj, internal_dict)
+    self.native = ["count", "allocated_count", "data", "local_storage"]
 
 
 class BucketArrayChildrenProvider:
@@ -137,9 +150,11 @@ def __lldb_init_module( debugger: lldb.SBDebugger, dict ):
   C(  "type summary add    -w JaiCompiler Newstring -F jaicompilertype.String" )
   C(  "type summary add -e -w JaiCompiler Array_View64 -F jaicompilertype.Array_View" )
   C( r"type summary add -e -w JaiCompiler -x '^Array<.*>$' -F jaicompilertype.ResizableArray" )
+  C( r"type summary add -e -w JaiCompiler -x '^Local_Array<.*>$' -F jaicompilertype.ResizableLocalArray" )
   C( r"type summary add -e -w JaiCompiler -x '^Bucket_Array<.*>$' -F jaicompilertype.BucketArray" )
   C(  "type synthetic add  -w JaiCompiler Array_View64 -l jaicompilertype.ArrayChildrenProvider" )
   C( r"type synthetic add  -w JaiCompiler -x '^Array<.*>$' -l jaicompilertype.ResizableArrayChildrenProvider" )
+  C( r"type synthetic add  -w JaiCompiler -x '^Local_Array<.*>$' -l jaicompilertype.ResizableLocalArrayChildrenProvider" )
   C( r"type synthetic add  -w JaiCompiler -x '^Bucket_Array<.*>$' -l jaicompilertype.BucketArrayChildrenProvider" )
   C(  'type category enable JaiCompiler' )
 
