@@ -31,10 +31,16 @@ def Array_View( valobj: lldb.SBValue, internal_dict, options ):
 
 def ResizableArray( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
-  return ( "Array(count="
-           + str( raw.GetChildMemberWithName( 'count' ).GetValueAsSigned() )
-           + ",allocated_count="
-           + str( raw.GetChildMemberWithName( 'allocated_count' ).GetValueAsSigned() )
+  count = raw.GetChildMemberWithName( 'count' )
+  name = 'count'
+  if count.error: # Braid’s arrays have the same type name but different members
+    count = raw.GetChildMemberWithName( 'items' )
+    name = 'items'
+  allocated = raw.GetChildMemberWithName( 'allocated_' + name )
+  return ( "Array(" + name + "="
+           + str( count.GetValueAsSigned() )
+           + ",allocated_" + name + "="
+           + str( allocated.GetValueAsSigned() )
            + ")" )
 
 def ResizableLocalArray( valobj: lldb.SBValue, internal_dict, options ):
@@ -57,7 +63,10 @@ class ArrayChildrenProvider:
     self.native = ["count", "data"]
 
   def update(self):
-    self.count = self.val.GetChildMemberWithName( 'count' ).GetValueAsSigned()
+    count = self.val.GetChildMemberWithName( 'count' )
+    if count.error: # Braid’s arrays have the same type name but different members
+      count = self.val.GetChildMemberWithName( 'items' )
+    self.count = count.GetValueAsSigned()
     self.data: lldb.SBValue = self.val.GetChildMemberWithName('data')
     self.data_type: lldb.SBType = self.data.GetType().GetPointeeType()
     self.data_size = self.data_type.GetByteSize()
@@ -89,7 +98,11 @@ class ArrayChildrenProvider:
 class ResizableArrayChildrenProvider(ArrayChildrenProvider):
   def __init__( self, valobj: lldb.SBValue, internal_dict):
     ArrayChildrenProvider.__init__(self, valobj, internal_dict)
-    self.native = ["count", "allocated_count", "data"]
+    count = self.val.GetChildMemberWithName( 'count' )
+    if count.error: # Braid’s arrays have the same type name but different members
+        self.native = ["items", "allocated_items", "data"]
+    else:
+        self.native = ["count", "allocated_count", "data"]
 
 class ResizableLocalArrayChildrenProvider(ArrayChildrenProvider):
   def __init__( self, valobj: lldb.SBValue, internal_dict):
