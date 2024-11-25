@@ -1,3 +1,8 @@
+# To debug this within lldb, insert the following code wherever you need to break:
+#
+#   import pdb
+#   pdb.set_trace()
+
 DEBUG = 0
 
 import lldb
@@ -33,7 +38,7 @@ def ResizableArray( valobj: lldb.SBValue, internal_dict, options ):
   raw: lldb.SBValue = valobj.GetNonSyntheticValue()
   count = raw.GetChildMemberWithName( 'count' )
   name = 'count'
-  if count.error: # Braid’s arrays have the same type name but different members
+  if count.error.Fail(): # Braid’s arrays have the same type name but different members
     count = raw.GetChildMemberWithName( 'items' )
     name = 'items'
   allocated = raw.GetChildMemberWithName( 'allocated_' + name )
@@ -64,7 +69,7 @@ class ArrayChildrenProvider:
 
   def update(self):
     count = self.val.GetChildMemberWithName( 'count' )
-    if count.error: # Braid’s arrays have the same type name but different members
+    if count.error.Fail(): # Braid’s arrays have the same type name but different members
       count = self.val.GetChildMemberWithName( 'items' )
     self.count = count.GetValueAsSigned()
     self.data: lldb.SBValue = self.val.GetChildMemberWithName('data')
@@ -99,7 +104,7 @@ class ResizableArrayChildrenProvider(ArrayChildrenProvider):
   def __init__( self, valobj: lldb.SBValue, internal_dict):
     ArrayChildrenProvider.__init__(self, valobj, internal_dict)
     count = self.val.GetChildMemberWithName( 'count' )
-    if count.error: # Braid’s arrays have the same type name but different members
+    if count.error.Fail(): # Braid’s arrays have the same type name but different members
         self.native = ["items", "allocated_items", "data"]
     else:
         self.native = ["count", "allocated_count", "data"]
